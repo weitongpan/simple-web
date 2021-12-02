@@ -128,6 +128,10 @@ export default {
     }
   },
   created () {
+    list().then(res => {
+      this.tableData = res.data.data
+      this.total = this.tableData.length
+    })
   },
   methods: {
     getTableData() {
