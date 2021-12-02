@@ -131,6 +131,7 @@ export default {
     list().then(res => {
       this.tableData = res.data.data
       this.total = this.tableData.length
+
     })
   },
   methods: {
