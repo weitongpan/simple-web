@@ -1,8 +1,8 @@
 <template>
   <div id="app" class="app">
     <div class="data-switch-box">
-      <el-button  type="primary" ref="manual" @click="dataSwitch('manual')">手动输入</el-button>
-      <el-button ref="automatic" @click="dataSwitch('automatic')">导入表格</el-button>
+      <el-button  :type="isManual? 'primary': ''" ref="manual" @click="dataSwitch(true)">手动输入</el-button>
+      <el-button :type="!isManual? 'primary': ''" ref="automatic" @click="dataSwitch(false)">导入表格</el-button>
     </div>
     <el-form v-if="isManual" :model="ruleForm" :rules="rules" ref="ruleForm" label-width="100px" class="demo-ruleForm">
       <el-form-item label="姓名" prop="name">
@@ -10,9 +10,6 @@
       </el-form-item>
       <el-form-item label="学号" prop="number">
         <el-input v-model="ruleForm.number"></el-input>
-      </el-form-item>
-      <el-form-item label="关键字" prop="key">
-        <el-input v-model="ruleForm.key"></el-input>
       </el-form-item>
       <el-form-item label="回答文本" prop="desc">
         <el-input type="textarea" v-model="ruleForm.desc"></el-input>
@@ -39,12 +36,17 @@
     </div>
     <div class="table-box">
       <div class="btn-box">
-        <el-button @click="statistics">统计</el-button>
-        <el-button @click="viewCloud">查看云词图</el-button>
+        <div class="key-box">
+          <el-input v-model="keyValue" placeholder="请输入关键字"></el-input>
+          <el-button @click="statistics">统计</el-button>
+        </div>
+        <div>
+          <el-button @click="viewCloud">查看云词图</el-button>
+        </div>
       </div>
       <div class="table">
         <el-table
-            :data="getTableData()"
+            :data="getTableData"
             stripe
             style="width: 100%">
           <el-table-column
@@ -58,14 +60,14 @@
               width="180">
           </el-table-column>
           <el-table-column
-              prop="answer"
+              prop="question"
               label="原回答">
           </el-table-column>
           <el-table-column
-              prop="analysis"
+              prop="answer"
               label="现回答">
             <template slot-scope="scope">
-              <div v-html="scope.row.analysis"></div>
+              <div v-html="scope.row.answer"></div>
             </template>
           </el-table-column>
         </el-table>
@@ -95,6 +97,7 @@ export default {
   name: 'app',
   data() {
     return {
+      keyValue: '',
       cpage: 1,
       statisticsData: '',
       imgData: '',
@@ -105,7 +108,6 @@ export default {
       ruleForm: {
         name: '',
         number: '',
-        key: '',
         desc: ''
       },
       rules: {
@@ -116,10 +118,6 @@ export default {
         number: [
           { required: true, message: '请输入学号', trigger: 'blur' }
         ],
-        key: [
-          { required: true, message: '请输入关键字', trigger: 'blur' },
-          { min: 1, max: 100, message: '长度不能超过 100 个字符', trigger: 'blur' }
-        ],
         desc: [
           { required: true, message: '请填写回答文本', trigger: 'blur' }
         ]
@@ -128,22 +126,32 @@ export default {
     }
   },
   created () {
-    list().then(res => {
-      this.tableData = res.data.data
-      this.total = this.tableData.length
-
-    })
+    this.packingList()
   },
-  methods: {
+  computed: {
     getTableData() {
       return this.tableData.slice((this.cpage - 1)*15,this.cpage*15)
+    }
+  },
+  methods: {
+    packingList() {
+      this.cpage = 1
+      list().then(res => {
+        this.tableData = res.data.data
+        this.total = this.tableData.length
+
+      })
     },
     statistics() {
-      this.dialogTableVisible = true
+      if (this.keyValue === '') {
+        this.$message.warning('请输入关键字')
+        return null
+      }
       count({
-        keys: ['test']
-      }).then(res => {
-        this.statisticsData = res.data.data
+        keys: this.keyValue
+      }).then((res) => {
+        this.cpage = 1
+        this.tableData = res.data.data
       })
     },
     viewCloud() {
@@ -164,23 +172,13 @@ export default {
     },
     onSuccess(res, file) {
       this.fileList.push(file)
-      list().then(res => {
-        this.tableData = res.data.data
-        this.total = this.tableData.length
-      })
+      this.packingList()
     },
     handleExceed(files, fileList) {
       this.$message.warning(`当前限制选择 1 个文件，本次选择了 ${files.length} 个文件，共选择了 ${files.length + fileList.length} 个文件`);
     },
-    dataSwitch(refName) {
-      this.$refs.manual.type = ''
-      this.$refs.automatic.type = ''
-      this.$refs[refName].type = 'primary'
-      if (refName === 'manual') {
-        this.isManual = true
-      } else {
-        this.isManual = false
-      }
+    dataSwitch(isPrimary) {
+      this.isManual = isPrimary
     },
     submitForm(formName) {
       this.$refs[formName].validate((valid) => {
@@ -191,19 +189,15 @@ export default {
             return
           }
           const data = {
-            key: this.ruleForm.key,
             name: this.ruleForm.name,
             number: n,
-            answer: this.ruleForm.desc,
+            question: this.ruleForm.desc,
 
           }
           insert(data).then(res => {
             if (res.data.code === 200) {
               this.$message.success('请求成功')
-              list().then(res => {
-                this.tableData = res.data.data
-                this.total = this.tableData.length
-              })
+              this.packingList()
             } else {
               this.$message.error('请求错误')
             }
@@ -246,6 +240,11 @@ export default {
   .table-box{
     .btn-box{
       padding: 30px 0 0 100px;
+      .key-box{
+        display: flex;
+        width: 300px;
+        margin-bottom: 10px;
+      }
     }
     .paging{
       text-align: center;
